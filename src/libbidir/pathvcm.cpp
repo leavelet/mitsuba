@@ -424,266 +424,248 @@ Float Path::miWeightVCM(const Scene *scene, const Path &emitterSubpath,
     return total_weight * w_conn;
 }
 
-//Float Path::miWeightBaseNoSweep_GDVCM(const Scene *scene, const Path &emitterSubpath,
-//        const PathEdge *connectionEdge, const Path &sensorSubpath,
-//        const Path& offsetEmitterSubpath, const PathEdge *offsetConnectionEdge,
-//        const Path &offsetSensorSubpath,
-//        int s, int t, bool sampleDirect, bool lightImage, Float jDet,
-//        Float exponent, double geomTermX, double geomTermY, int maxT, float th,
-//        Float radius, size_t nEmitterPaths, bool merge, bool merge_only) {
-//    int k = s + t + 1, n = k + 1;
-//    // for vcm
-//    Float *accProb = (Float *) alloca(n * sizeof (Float));
-//
-//    const PathVertex
-//            *vsPred = emitterSubpath.vertexOrNull(s - 1),
-//            *vtPred = sensorSubpath.vertexOrNull(t - 1),
-//            *vs = emitterSubpath.vertex(s),
-//            *vt = sensorSubpath.vertex(t);
-//
-//    /* pdfImp[i] and pdfRad[i] store the area/volume density of vertex
-//    'i' when sampled from the adjacent vertex in the emitter
-//    and sensor direction, respectively. */
-//
-//    Float ratioEmitterDirect = 0.0f;
-//    Float ratioSensorDirect = 0.0f;
-//    Float *pdfImp = (Float *) alloca(n * sizeof (Float));
-//    Float *pdfRad = (Float *) alloca(n * sizeof (Float));
-//    bool *connectable = (bool *)alloca(n * sizeof (bool));
-//    bool *connectableStrict = (bool *)alloca(n * sizeof (bool));
-//    bool *isNull = (bool *)alloca(n * sizeof (bool));
-//    bool *isEmitter = (bool *)alloca(n * sizeof (bool));
-//
-//    /* Keep track of which vertices are connectable / null interactions */
-//    // a perfectly specular interaction is *not* connectable!
-//    int pos = 0;
-//    for (int i = 0; i <= s; ++i) {
-//        const PathVertex *v = emitterSubpath.vertex(i);
-//        connectable[pos] = Path::isConnectable_GBDPT(v, th);
-//        connectableStrict[pos] = v->isConnectable();
-//        isNull[pos] = v->isNullInteraction() && !connectable[pos];
-//        isEmitter[pos] = v->isEmitterSample();
-//        pos++;
-//    }
-//
-//    for (int i = t; i >= 0; --i) {
-//        const PathVertex *v = sensorSubpath.vertex(i);
-//        connectable[pos] = Path::isConnectable_GBDPT(v, th);
-//        connectableStrict[pos] = v->isConnectable();
-//        isNull[pos] = v->isNullInteraction() && !connectable[pos];
-//        isEmitter[pos] = v->isEmitterSample();
-//        pos++;
-//    }
-//
-//    connectable[s+1] = true; // must force the actual connection to be connectable.
-//    if(!merge) connectable[s] = true;
-//    EMeasure vsMeasure = EArea, vtMeasure = EArea;
-//
-//    fillPdfList(scene, emitterSubpath, sensorSubpath, connectionEdge, s, t, vsMeasure, vtMeasure,
-//            connectableStrict, merge, pdfImp, pdfRad, isNull, merge_only, th, nEmitterPaths, accProb, radius);
-//
-//    double sum_p = 0.f;
-//
-//    auto num_conn_shemes = [&](int i) {
-//        if ((connectableStrict[i] || isNull[i]) && connectableStrict[i+1] && !merge_only) {
-//            return Float(1);
-//        }
-//        return Float(0);
-//    };
-//    
-//    auto getVertex = [&](int i) -> const PathVertex* {
-//        if (i <= s) return emitterSubpath.vertexOrNull(i);
-//        return sensorSubpath.vertexOrNull(k - i);
-//    };
-//    
-//    auto conn_prob = [&](int i) {
-//        if(i <= 1 || i == k) return num_conn_shemes(i);
-//        Float ps = getVertex(i)->evalSelectionProb(scene, getVertex(i-1), EImportance, th);
-//        Float pt = getVertex(i+1)->evalSelectionProb(scene, getVertex(i+2), ERadiance, th);
-//        return ps * pt * num_conn_shemes(i);
-//    };
-//    
-//    auto merge_prob = [&](int i) {
-//        if(i == 0 || i == k) return Float(0.f);
-//        Float pt = getVertex(i+1)->evalSelectionProb(scene, getVertex(i+2), ERadiance, th);
-//        return pt * accProb[i + 1];
-//    };
-//
-//    /* No linear sweep */
-//    double p_i, p_st = 0.0;
-//    for (int p = 0; p < s + t + 1; ++p) {
-//        p_i = 1.f;
-//
-//        for (int i = 1; i < p + 1; ++i) {
-//            p_i *= pdfImp[i];
-//        }
-//
-//        for (int i = p + 1; i < s + t + 1; ++i) {
-//            p_i *= pdfRad[i];
-//        }
-//
-//        int tPrime = k - p - 1;
-//        Float p_conn_merge = std::pow(conn_prob(p), exponent) + pow(nEmitterPaths * merge_prob(p), exponent); // for VCM: Now we have 2 ways to sample this path. 1 is for connection, accProb[i] is for merging
-//
-//        bool allowedToConnect = connectableStrict[p + 1];
-//        if (allowedToConnect && MIScond_GBDPT(tPrime, p, lightImage)) {
-//            sum_p += std::pow(p_i * geomTermX, exponent) * p_conn_merge;
-//        }
-//
-//        if (tPrime == t) {
-//            p_st = std::pow(p_i * geomTermX, exponent) * p_conn_merge;
-//        }
-//    }
-//    Float mergeWeight = std::pow(merge_prob(s), exponent);
-//    Float connWeight = std::pow(conn_prob(s), exponent);
-//    Float totalWeight = std::pow(conn_prob(s), exponent) + 
-//                std::pow(merge_prob(s) * nEmitterPaths, exponent) + D_EPSILON;
-//    
-//    if (sum_p == 0.0) return 0.0;
-//    if (merge) return (Float) (p_st / sum_p * mergeWeight / totalWeight);
-//    return (Float) (p_st / sum_p * connWeight / totalWeight);
-//}
-//
-//Float Path::miWeightGradNoSweep_GDVCM(const Scene *scene, const Path &emitterSubpath,
-//        const PathEdge *connectionEdge, const Path &sensorSubpath,
-//        const Path&offsetEmitterSubpath, const PathEdge *offsetConnectionEdge,
-//        const Path &offsetSensorSubpath,
-//        int s, int t, bool sampleDirect, bool lightImage, Float jDet,
-//        Float exponent, double geomTermX, double geomTermY, int maxT, float th,
-//        Float radius, size_t nEmitterPaths, bool merge, bool merge_only) {
-//    int k = s + t + 1, n = k + 1;
-//    // for vcm
-//    Float *accProb = (Float *) alloca(n * sizeof (Float));
-//    Float *oAccProb = (Float *) alloca(n * sizeof (Float));
-//
-//    Float *pdfImp = (Float *) alloca(n * sizeof (Float));
-//    Float *pdfRad = (Float *) alloca(n * sizeof (Float));
-//    Float *offsetPdfImp = (Float *) alloca(n * sizeof (Float));
-//    Float *offsetPdfRad = (Float *) alloca(n * sizeof (Float));
-//    bool *connectable = (bool *)alloca(n * sizeof (bool));
-//    bool *connectableStrict = (bool *)alloca(n * sizeof (bool));
-//    bool *isNull = (bool *)alloca(n * sizeof (bool));
-//    bool *isEmitter = (bool *)alloca(n * sizeof (bool));
-//
-//    /* Keep track of which vertices are connectable / null interactions */
-//    // a perfectly specular interaction is *not* connectable!
-//    int pos = 0;
-//    for (int i = 0; i <= s; ++i) {
-//        const PathVertex *v = emitterSubpath.vertex(i);
-//        connectable[pos] = Path::isConnectable_GBDPT(v, th);
-//        connectableStrict[pos] = v->isConnectable();
-//        isNull[pos] = v->isNullInteraction() && !connectable[pos];
-//        isEmitter[pos] = v->isEmitterSample();
-//        pos++;
-//    }
-//
-//    for (int i = t; i >= 0; --i) {
-//        const PathVertex *v = sensorSubpath.vertex(i);
-//        connectable[pos] = Path::isConnectable_GBDPT(v, th);
-//        connectableStrict[pos] = v->isConnectable();
-//        isNull[pos] = v->isNullInteraction() && !connectable[pos];
-//        isEmitter[pos] = v->isEmitterSample();
-//        pos++;
-//    }
-//
-//    connectable[s+1] = true; // must force the actual connection to be connectable.
-//    if(!merge) connectable[s] = true;
-//    
-//    EMeasure vsMeasure = EArea, vtMeasure = EArea;
-//
-//    fillPdfList(scene, emitterSubpath, sensorSubpath, connectionEdge, s, t, vsMeasure, vtMeasure,
-//            connectableStrict, merge, pdfImp, pdfRad, isNull, merge_only, th, nEmitterPaths, accProb, radius);
-//
-//    fillPdfList(scene, offsetEmitterSubpath, offsetSensorSubpath, offsetConnectionEdge, s, t, vsMeasure, vtMeasure,
-//            connectableStrict, merge, offsetPdfImp, offsetPdfRad, isNull, merge_only, th, nEmitterPaths, oAccProb, radius);
-//
-//    double sum_p = 0.f, p_st = 0.f;
-//
-//    auto num_conn_shemes = [&](int i) {
-//        if ((connectableStrict[i] || isNull[i]) && connectableStrict[i+1] && !merge_only) {
-//            return Float(1);
-//        }
-//        return Float(0);
-//    };
-//    
-//    auto getVertex = [&](int i) -> const PathVertex* {
-//        if (i <= s) return emitterSubpath.vertexOrNull(i);
-//        return sensorSubpath.vertexOrNull(k - i);
-//    };
-//    
-//    auto conn_prob = [&](int i) {
-//        if(i <= 1 || i == k) return num_conn_shemes(i);
-//        Float ps = getVertex(i)->evalSelectionProb(scene, getVertex(i-1), EImportance, th);
-//        Float pt = getVertex(i+1)->evalSelectionProb(scene, getVertex(i+2), ERadiance, th);
-//        return ps * pt * num_conn_shemes(i);
-//    };
-//    
-//    auto merge_prob = [&](int i) {
-//        if(i == 0 || i == k) return Float(0.f);
-//        Float pt = getVertex(i+1)->evalSelectionProb(scene, getVertex(i+2), ERadiance, th);
-//        return pt * std::pow(accProb[i + 1], exponent);
-//    };
-//    
-//    auto getOffsetVertex = [&](int i) -> const PathVertex* {
-//        if (i <= s) return offsetEmitterSubpath.vertexOrNull(i);
-//        return offsetSensorSubpath.vertexOrNull(k - i);
-//    };
-//    
-//    auto offset_conn_prob = [&](int i) {
-//        if(i <= 1 || i == k) return num_conn_shemes(i);
-//        Float ps = getOffsetVertex(i)->evalSelectionProb(scene, getOffsetVertex(i-1), EImportance, th);
-//        Float pt = getOffsetVertex(i+1)->evalSelectionProb(scene, getOffsetVertex(i+2), ERadiance, th);
-//        return ps * pt * num_conn_shemes(i);
-//    };
-//    
-//    auto offset_merge_prob = [&](int i) {
-//        if(i == 0 || i == k) return Float(0.f);
-//        Float pt = getOffsetVertex(i+1)->evalSelectionProb(scene, getOffsetVertex(i+2), ERadiance, th);
-//        return pt * std::pow(oAccProb[i + 1], exponent);
-//    };
-//
-//    /* No linear sweep */
-//    double value, oValue;
-//    for (int p = 0; p < s + t + 1; ++p) {
-//        value = 1.f;
-//        oValue = 1.f;
-//
-//        for (int i = 1; i < p + 1; ++i) {
-//            value *= pdfImp[i];
-//            oValue *= offsetPdfImp[i];
-//        }
-//
-//        for (int i = p + 1; i < s + t + 1; ++i) {
-//            value *= pdfRad[i];
-//            oValue *= offsetPdfRad[i];
-//        }
-//
-//        Float p_conn_merge = std::pow(conn_prob(p), exponent) + 
-//                std::pow(merge_prob(p) * nEmitterPaths, exponent); // for VCM: Now we have 2 ways to sample this path. 1 is for connection, accProb[i] is for merging
-//
-//        Float op_conn_merge = std::pow(offset_conn_prob(p), exponent) + 
-//                std::pow(offset_merge_prob(p) * nEmitterPaths, exponent);
-//
-//        int tPrime = k - p - 1;
-//        bool allowedToConnect = connectableStrict[p + 1];
-//        if (allowedToConnect && MIScond_GBDPT(tPrime, p, lightImage))
-//            sum_p += std::pow(value * geomTermX, exponent) * p_conn_merge +
-//                std::pow(oValue * jDet * geomTermY, exponent) * op_conn_merge;
-//        if (tPrime == t)
-//            p_st = std::pow(value * geomTermX, exponent) * p_conn_merge;
-//    }
-//
-//    Float mergeWeight = std::pow(merge_prob(s), exponent);
-//    Float connWeight = std::pow(conn_prob(s), exponent);
-//    Float totalWeight = std::pow(conn_prob(s), exponent) + 
-//                std::pow(merge_prob(s) * nEmitterPaths, exponent) + D_EPSILON;
-//
-//    if (sum_p == 0.0) return 0.0;
-//
-//    if (merge)
-//        return (Float) (p_st / sum_p * mergeWeight / totalWeight);
-//    return (Float) (p_st / sum_p * connWeight / totalWeight);
-//}
+Float Path::miWeightBaseNoSweep_GDVCM(const Scene *scene, const Path &emitterSubpath,
+        const PathEdge *connectionEdge, const Path &sensorSubpath,
+        const Path& offsetEmitterSubpath, const PathEdge *offsetConnectionEdge,
+        const Path &offsetSensorSubpath,
+        int s, int t, bool sampleDirect, bool lightImage, Float jDet,
+        Float exponent, double geomTermX, double geomTermY, int maxT, float th,
+        Float radius, size_t nEmitterPaths, bool merge, bool merge_only) {
+    int k = s + t + 1, n = k + 1;
+    // for vcm
+    Float *accProb = (Float *) alloca(n * sizeof (Float));
+
+    const PathVertex
+            *vsPred = emitterSubpath.vertexOrNull(s - 1),
+            *vtPred = sensorSubpath.vertexOrNull(t - 1),
+            *vs = emitterSubpath.vertex(s),
+            *vt = sensorSubpath.vertex(t);
+
+    /* pdfImp[i] and pdfRad[i] store the area/volume density of vertex
+    'i' when sampled from the adjacent vertex in the emitter
+    and sensor direction, respectively. */
+
+    Float ratioEmitterDirect = 0.0f;
+    Float ratioSensorDirect = 0.0f;
+    Float *pdfImp = (Float *) alloca(n * sizeof (Float));
+    Float *pdfRad = (Float *) alloca(n * sizeof (Float));
+    bool *connectable = (bool *)alloca(n * sizeof (bool));
+    bool *connectableStrict = (bool *)alloca(n * sizeof (bool));
+    bool *isNull = (bool *)alloca(n * sizeof (bool));
+    bool *isEmitter = (bool *)alloca(n * sizeof (bool));
+
+    /* Keep track of which vertices are connectable / null interactions */
+    // a perfectly specular interaction is *not* connectable!
+    int pos = 0;
+    for (int i = 0; i <= s; ++i) {
+        const PathVertex *v = emitterSubpath.vertex(i);
+        connectable[pos] = Path::isConnectable_GBDPT(v, th);
+        connectableStrict[pos] = v->isConnectable();
+        isNull[pos] = v->isNullInteraction() && !connectable[pos];
+        isEmitter[pos] = v->isEmitterSample();
+        pos++;
+    }
+
+    for (int i = t; i >= 0; --i) {
+        const PathVertex *v = sensorSubpath.vertex(i);
+        connectable[pos] = Path::isConnectable_GBDPT(v, th);
+        connectableStrict[pos] = v->isConnectable();
+        isNull[pos] = v->isNullInteraction() && !connectable[pos];
+        isEmitter[pos] = v->isEmitterSample();
+        pos++;
+    }
+
+    connectable[s+1] = true; // must force the actual connection to be connectable.
+    if(!merge) connectable[s] = true;
+    EMeasure vsMeasure = EArea, vtMeasure = EArea;
+
+    fillPdfList(scene, emitterSubpath, sensorSubpath, connectionEdge, s, t, vsMeasure, vtMeasure,
+            connectableStrict, merge, pdfImp, pdfRad, isNull, merge_only, th, nEmitterPaths, accProb, radius);
+
+    double sum_p = 0.f;
+
+    auto num_conn_shemes = [&](int i) {
+        return Float(connectable[i] && connectable[i+1] && !merge_only ? 1 : 0);
+    };
+
+    auto getVertex = [&](int i) -> const PathVertex* {
+        if (i <= s) return emitterSubpath.vertexOrNull(i);
+        return sensorSubpath.vertexOrNull(k - i);
+    };
+
+    auto conn_prob = [&](int i) {
+        return num_conn_shemes(i);
+    };
+
+    auto merge_prob = [&](int i) {
+        if(i == 0 || i == k) return Float(0.f);
+        return accProb[i + 1];
+    };
+
+    /* No linear sweep */
+    double p_i, p_st = 0.0;
+    for (int p = 0; p < s + t + 1; ++p) {
+        p_i = 1.f;
+
+        for (int i = 1; i < p + 1; ++i) {
+            p_i *= pdfImp[i];
+        }
+
+        for (int i = p + 1; i < s + t + 1; ++i) {
+            p_i *= pdfRad[i];
+        }
+
+        int tPrime = k - p - 1;
+        Float p_conn_merge = std::pow(conn_prob(p), exponent) + pow(nEmitterPaths * merge_prob(p), exponent); // for VCM: Now we have 2 ways to sample this path. 1 is for connection, accProb[i] is for merging
+
+        bool allowedToConnect = connectableStrict[p + 1];
+        if (allowedToConnect && MIScond_GBDPT(tPrime, p, lightImage)) {
+            sum_p += std::pow(p_i * geomTermX, exponent) * p_conn_merge;
+        }
+
+        if (tPrime == t) {
+            p_st = std::pow(p_i * geomTermX, exponent) * p_conn_merge;
+        }
+    }
+    Float mergeWeight = std::pow(merge_prob(s), exponent);
+    Float connWeight = std::pow(conn_prob(s), exponent);
+    Float totalWeight = std::pow(conn_prob(s), exponent) + 
+                std::pow(merge_prob(s) * nEmitterPaths, exponent) + D_EPSILON;
+    
+    if (sum_p == 0.0) return 0.0;
+    if (merge) return (Float) (p_st / sum_p * mergeWeight / totalWeight);
+    return (Float) (p_st / sum_p * connWeight / totalWeight);
+}
+
+Float Path::miWeightGradNoSweep_GDVCM(const Scene *scene, const Path &emitterSubpath,
+        const PathEdge *connectionEdge, const Path &sensorSubpath,
+        const Path&offsetEmitterSubpath, const PathEdge *offsetConnectionEdge,
+        const Path &offsetSensorSubpath,
+        int s, int t, bool sampleDirect, bool lightImage, Float jDet,
+        Float exponent, double geomTermX, double geomTermY, int maxT, float th,
+        Float radius, size_t nEmitterPaths, bool merge, bool merge_only) {
+    int k = s + t + 1, n = k + 1;
+    // for vcm
+    Float *accProb = (Float *) alloca(n * sizeof (Float));
+    Float *oAccProb = (Float *) alloca(n * sizeof (Float));
+
+    Float *pdfImp = (Float *) alloca(n * sizeof (Float));
+    Float *pdfRad = (Float *) alloca(n * sizeof (Float));
+    Float *offsetPdfImp = (Float *) alloca(n * sizeof (Float));
+    Float *offsetPdfRad = (Float *) alloca(n * sizeof (Float));
+    bool *connectable = (bool *)alloca(n * sizeof (bool));
+    bool *connectableStrict = (bool *)alloca(n * sizeof (bool));
+    bool *isNull = (bool *)alloca(n * sizeof (bool));
+    bool *isEmitter = (bool *)alloca(n * sizeof (bool));
+
+    /* Keep track of which vertices are connectable / null interactions */
+    // a perfectly specular interaction is *not* connectable!
+    int pos = 0;
+    for (int i = 0; i <= s; ++i) {
+        const PathVertex *v = emitterSubpath.vertex(i);
+        connectable[pos] = Path::isConnectable_GBDPT(v, th);
+        connectableStrict[pos] = v->isConnectable();
+        isNull[pos] = v->isNullInteraction() && !connectable[pos];
+        isEmitter[pos] = v->isEmitterSample();
+        pos++;
+    }
+
+    for (int i = t; i >= 0; --i) {
+        const PathVertex *v = sensorSubpath.vertex(i);
+        connectable[pos] = Path::isConnectable_GBDPT(v, th);
+        connectableStrict[pos] = v->isConnectable();
+        isNull[pos] = v->isNullInteraction() && !connectable[pos];
+        isEmitter[pos] = v->isEmitterSample();
+        pos++;
+    }
+
+    connectable[s+1] = true; // must force the actual connection to be connectable.
+    if(!merge) connectable[s] = true;
+    
+    EMeasure vsMeasure = EArea, vtMeasure = EArea;
+
+    fillPdfList(scene, emitterSubpath, sensorSubpath, connectionEdge, s, t, vsMeasure, vtMeasure,
+            connectableStrict, merge, pdfImp, pdfRad, isNull, merge_only, th, nEmitterPaths, accProb, radius);
+
+    fillPdfList(scene, offsetEmitterSubpath, offsetSensorSubpath, offsetConnectionEdge, s, t, vsMeasure, vtMeasure,
+            connectableStrict, merge, offsetPdfImp, offsetPdfRad, isNull, merge_only, th, nEmitterPaths, oAccProb, radius);
+
+    double sum_p = 0.f, p_st = 0.f;
+
+    auto num_conn_shemes = [&](int i) {
+        return Float(connectable[i] && connectable[i+1] && !merge_only ? 1 : 0);
+    };
+
+    auto getVertex = [&](int i) -> const PathVertex* {
+        if (i <= s) return emitterSubpath.vertexOrNull(i);
+        return sensorSubpath.vertexOrNull(k - i);
+    };
+
+    auto conn_prob = [&](int i) {
+        return num_conn_shemes(i);
+    };
+
+    auto merge_prob = [&](int i) {
+        if(i == 0 || i == k) return Float(0.f);
+        return std::pow(accProb[i + 1], exponent);
+    };
+    
+    auto getOffsetVertex = [&](int i) -> const PathVertex* {
+        if (i <= s) return offsetEmitterSubpath.vertexOrNull(i);
+        return offsetSensorSubpath.vertexOrNull(k - i);
+    };
+    
+    auto offset_conn_prob = [&](int i) {
+        return num_conn_shemes(i);
+    };
+    
+    auto offset_merge_prob = [&](int i) {
+        if(i == 0 || i == k) return Float(0.f);
+        return std::pow(oAccProb[i + 1], exponent);
+    };
+
+    /* No linear sweep */
+    double value, oValue;
+    for (int p = 0; p < s + t + 1; ++p) {
+        value = 1.f;
+        oValue = 1.f;
+
+        for (int i = 1; i < p + 1; ++i) {
+            value *= pdfImp[i];
+            oValue *= offsetPdfImp[i];
+        }
+
+        for (int i = p + 1; i < s + t + 1; ++i) {
+            value *= pdfRad[i];
+            oValue *= offsetPdfRad[i];
+        }
+
+        Float p_conn_merge = std::pow(conn_prob(p), exponent) + 
+                std::pow(merge_prob(p) * nEmitterPaths, exponent); // for VCM: Now we have 2 ways to sample this path. 1 is for connection, accProb[i] is for merging
+
+        Float op_conn_merge = std::pow(offset_conn_prob(p), exponent) + 
+                std::pow(offset_merge_prob(p) * nEmitterPaths, exponent);
+
+        int tPrime = k - p - 1;
+        bool allowedToConnect = connectableStrict[p + 1];
+        if (allowedToConnect && MIScond_GBDPT(tPrime, p, lightImage))
+            sum_p += std::pow(value * geomTermX, exponent) * p_conn_merge +
+                std::pow(oValue * jDet * geomTermY, exponent) * op_conn_merge;
+        if (tPrime == t)
+            p_st = std::pow(value * geomTermX, exponent) * p_conn_merge;
+    }
+
+    Float mergeWeight = std::pow(merge_prob(s), exponent);
+    Float connWeight = std::pow(conn_prob(s), exponent);
+    Float totalWeight = std::pow(conn_prob(s), exponent) + 
+                std::pow(merge_prob(s) * nEmitterPaths, exponent) + D_EPSILON;
+
+    if (sum_p == 0.0) return 0.0;
+
+    if (merge)
+        return (Float) (p_st / sum_p * mergeWeight / totalWeight);
+    return (Float) (p_st / sum_p * connWeight / totalWeight);
+}
 
 MTS_NAMESPACE_END
 
