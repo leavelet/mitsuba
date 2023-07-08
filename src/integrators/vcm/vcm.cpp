@@ -149,9 +149,8 @@ public:
         m_config.initialRadius = props.getFloat("initialRadius", 0.f);
         m_config.radiusReductionAlpha = props.getFloat("radiusReductionAlpha", 0.95f);
         m_config.mergeOnly = props.getBoolean("mergeOnly", false);
-        m_config.metropolis = props.getBoolean("metropolis", false);
         if (m_config.mergeOnly) m_config.lightImage = false;
-        if (m_config.metropolis) m_config.lightImage = true;
+        m_config.directTracing = props.getBoolean("directTracing", true);
 
 #if VCM_DEBUG == 1
         if (m_config.maxDepth == -1 || m_config.maxDepth > 6) {
@@ -194,11 +193,11 @@ public:
                 "by the bidirectional path tracer!");
         if (m_config.initialRadius == 0) {
             /* Guess an initial radius if not provided
-              (scene width / horizontal or vertical pixel count) * 5 */
+              (scene width / horizontal or vertical pixel count) * 1 */
             Float rad = scene->getBSphere().radius;
             Vector2i filmSize = scene->getSensor()->getFilm()->getSize();
-
-            m_config.initialRadius = std::min(rad / filmSize.x, rad / filmSize.y) * 5;
+            m_config.initialRadius = std::min(rad / filmSize.x, rad / filmSize.y) * 1;
+            Log(EInfo, "Initial radius computed automatically: %f", m_config.initialRadius);
         }
 
         return true;
@@ -246,22 +245,10 @@ public:
 #if defined(MTS_OPENMP)
         Thread::initializeOpenMP(nCores);
 #endif
-        /* Create a sampler instance for each worker */
-        ref<PSSMLTSamplerBase> mltSampler = new PSSMLTSamplerBase(1.0);
-        std::vector<SerializableObject *> mltSamplers(scheduler->getCoreCount());
-        for (size_t i = 0; i < mltSamplers.size(); ++i) {
-            ref<Sampler> clonedSampler = mltSampler->clone();
-            clonedSampler->incRef();
-            mltSamplers[i] = clonedSampler.get();
-        }
-        int mltSamplerResID = scheduler->registerMultiResource(mltSamplers);
-        process->bindResource("mltSampler", mltSamplerResID);
-
         for (size_t i = 0; i < sampleCount; i++) {
-            if (iterateVCM(process, sensorResID, i) == false) break;
+            if (!iterateVCM(process, sensorResID, i)) break;
         }
         scheduler->unregisterResource(bidirSceneResID);
-        scheduler->unregisterResource(mltSamplerResID);
         m_process = NULL;
         process->develop();
 

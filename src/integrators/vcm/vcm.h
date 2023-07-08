@@ -46,12 +46,13 @@ struct VCMConfiguration : public VCMConfigBase {
 	bool showWeighted;
 	size_t sampleCount;
 	Vector2i cropSize;
-        Float initialRadius;
-        Float radiusReductionAlpha;
-        bool mergeOnly;
-        
+	Float initialRadius;
+	Float radiusReductionAlpha;
+	bool mergeOnly;
+	bool directTracing;
 
-	inline VCMConfiguration() { }
+
+	inline VCMConfiguration() {}
 
 	inline VCMConfiguration(Stream *stream) {
 		maxDepth = stream->readInt();
@@ -62,10 +63,10 @@ struct VCMConfiguration : public VCMConfigBase {
 		sampleCount = stream->readSize();
 		cropSize = Vector2i(stream);
 		rrDepth = stream->readInt();
-                initialRadius = stream->readFloat();
-                radiusReductionAlpha = stream->readFloat();
-                phExponent = stream->readFloat();
-                mergeOnly = stream->readSize();
+		initialRadius = stream->readFloat();
+		radiusReductionAlpha = stream->readFloat();
+		phExponent = stream->readFloat();
+		mergeOnly = stream->readSize();
 	}
 
 	inline void serialize(Stream *stream) const {
@@ -77,27 +78,28 @@ struct VCMConfiguration : public VCMConfigBase {
 		stream->writeSize(sampleCount);
 		cropSize.serialize(stream);
 		stream->writeInt(rrDepth);
-                stream->writeFloat(initialRadius);
-                stream->writeFloat(radiusReductionAlpha);
-                stream->writeFloat(phExponent);
-                stream->writeBool(mergeOnly);
+		stream->writeFloat(initialRadius);
+		stream->writeFloat(radiusReductionAlpha);
+		stream->writeFloat(phExponent);
+		stream->writeBool(mergeOnly);
 	}
 
 	void dump() const {
 		SLog(EDebug, "Bidirectional path tracer configuration:");
 		SLog(EDebug, "   Maximum path depth          : %i", maxDepth);
 		SLog(EDebug, "   Image size                  : %ix%i",
-			cropSize.x, cropSize.y);
+			 cropSize.x, cropSize.y);
 		SLog(EDebug, "   Direct sampling strategies  : %s",
-			sampleDirect ? "yes" : "no");
+			 sampleDirect ? "yes" : "no");
 		SLog(EDebug, "   Generate light image        : %s",
-			lightImage ? "yes" : "no");
+			 lightImage ? "yes" : "no");
 		SLog(EDebug, "   Russian roulette depth      : %i", rrDepth);
 		SLog(EDebug, "   Block size                  : %i", blockSize);
-		SLog(EDebug, "   Number of samples           : " SIZE_T_FMT, sampleCount);
-		#if VCM_DEBUG == 1
-			SLog(EDebug, "   Show weighted contributions : %s", showWeighted ? "yes" : "no");
-		#endif
+		SLog(EDebug, "   Number of samples           : "
+				SIZE_T_FMT, sampleCount);
+#if VCM_DEBUG == 1
+		SLog(EDebug, "   Show weighted contributions : %s", showWeighted ? "yes" : "no");
+#endif
 	}
 };
 

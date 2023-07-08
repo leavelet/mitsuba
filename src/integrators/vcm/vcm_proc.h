@@ -29,7 +29,7 @@
 #if defined(MTS_OPENMP)
 #define NANOFLANN_USE_OMP
 #endif
-#include <mitsuba/core/nanoflann.h>
+#include "nanoflann/nanoflann.hpp"
 
 MTS_NAMESPACE_BEGIN
 
